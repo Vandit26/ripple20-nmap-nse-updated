@@ -1,4 +1,3 @@
-local bin = require "bin"
 local nmap = require "nmap"
 local packet = require "packet"
 local stdnse = require "stdnse"
@@ -40,75 +39,75 @@ license = "Same as Nmap--See https://nmap.org/book/man-legal.html"
 categories = {"discovery","safe"}
 
 local print_table = function(t)
-	for k,v in pairs(t) do
-		stdnse.print_debug ( 1, " print_table() -> %s : %s", k,v)
-	end
+        for k,v in pairs(t) do
+                stdnse.print_debug ( 1, " print_table() -> %s : %s", k,v)
+        end
 end
 
 prerule = function()
-	nmap.registry[hIndex] = nmap.is_privileged() and true or false
-	stdnse.print_debug ( 1, " RIPPLE20 ICMP test ENABLED.")
-	return false
+        nmap.registry[hIndex] = nmap.is_privileged() and true or false
+        stdnse.print_debug ( 1, " RIPPLE20 ICMP test ENABLED.")
+        return false
 end
 
 hostrule = function(host)
-	stdnse.print_debug ( 1, " Running RIPPLE20 ICMP test for %s", host.name)
-	return true
+        stdnse.print_debug ( 1, " Running RIPPLE20 ICMP test for %s", host.name)
+        return true
 end
 
 action = function(host)
-	-- sanity check (do I have root permission?)
-	if ( host == nil or host.interface == nil or nmap.registry[hIndex] ~= true) then
-		return false
-	end
+        -- sanity check (do I have root permission?)
+        if ( host == nil or host.interface == nil or nmap.registry[hIndex] ~= true) then
+                return false
+        end
 
-	local anon = tonumber(stdnse.get_script_args(SCRIPT_NAME .. ".anonymize")) or 0
-	local timeout = tonumber(stdnse.get_script_args(SCRIPT_NAME .. ".timeout")) or pTimeout
-	timeout = timeout * 1000
+        local anon = tonumber(stdnse.get_script_args(SCRIPT_NAME .. ".anonymize")) or 0
+        local timeout = tonumber(stdnse.get_script_args(SCRIPT_NAME .. ".timeout")) or pTimeout
+        timeout = timeout * 1000
 
-	local iInfo, output = nmap.get_interface_info(host.interface), nil
-	local icmp = packet.Packet:new()
+        local iInfo, output = nmap.get_interface_info(host.interface), nil
+        local icmp = packet.Packet:new()
 
-	icmp.mac_src = iInfo.mac_addr
-	icmp.mac_dst = host.mac_addr
-	icmp.ip_p = 1 -- IPPROTO_ICMP
-	icmp.ip_bin_src = ipOps.ip_to_str(iInfo.address)
-	icmp.ip_bin_dst = ipOps.ip_to_str(host.ip)
+        icmp.mac_src = iInfo.mac_addr
+        icmp.mac_dst = host.mac_addr
+        icmp.ip_p = 1 -- IPPROTO_ICMP
+        icmp.ip_bin_src = ipOps.ip_to_str(iInfo.address)
+        icmp.ip_bin_dst = ipOps.ip_to_str(host.ip)
 
-	icmp.icmp = true
-	icmp.icmp_type = ICMP_MS_SYNC_REQ
-	icmp.icmp_code = 0
+        icmp.icmp = true
+        icmp.icmp_type = ICMP_MS_SYNC_REQ
+        icmp.icmp_code = 0
 
-	if ( anon == 0) then	
-		icmp.icmp_payload = bin.pack(">H", 0xdead) .. bin.pack(">H", 0xbeef) .. "ripple"
-	else
-		icmp.icmp_payload = openssl.rand_bytes(2) .. openssl.rand_bytes(2) .. openssl.rand_bytes(8)
-	end
+        if ( anon == 0) then
+                icmp.icmp_payload = string.pack(">H", 0xdead) .. string.pack(">H", 0xbeef) .. "ripple"
+        else
+                icmp.icmp_payload = openssl.rand_bytes(2) .. openssl.rand_bytes(2) .. openssl.rand_bytes(6)  -- Adjusted to 6 bytes to match "ripple" length for consistency
+        end
 
-	icmp:build_icmp_header()
-	icmp:build_ip_packet()
-	
-	local dnet = nmap.new_dnet()
-	dnet:ip_open()
+        icmp:build_icmp_header()
+        icmp:build_ip_packet()
 
-	local pcap = nmap.new_socket()
-	pcap:set_timeout(timeout)
-	stdnse.print_debug ( 1, "(timeout %d) -> (%s) filter: %s", timeout, iInfo.device, string.format ( "icmp and src %s", host.ip))
-	pcap:pcap_open ( iInfo.device, 104, false, string.format ( "icmp and src %s", host.ip))
+        local dnet = nmap.new_dnet()
+        dnet:ip_open()
 
-	dnet:ip_send ( icmp.buf, host)
-	local status, len, _, respdata, _ = pcap:pcap_receive()	
+        local pcap = nmap.new_socket()
+        pcap:set_timeout(timeout)
+        stdnse.print_debug ( 1, "(timeout %d) -> (%s) filter: %s", timeout, iInfo.device, string.format ( "icmp and src %s", host.ip))
+        pcap:pcap_open ( iInfo.device, 104, false, string.format ( "icmp and src %s", host.ip))
 
-	if ( status) then	
-		local response = packet.Packet:new ( respdata, len, false)
-		if ( response:ip_parse() and response:icmp_parse() and response.icmp_type == ICMP_MS_SYNC_RESP) then
-			stdnse.print_debug ( 1, "Found ----> IP %s | ICMP Type %d", response.ip_src, response.icmp_type)
-			output = string.format ( "Received ICMP MS_SYNC RESP for IP %s -- possible Treck TCP/IP stack.", host.ip)
-		end
-	end
+        dnet:ip_send ( icmp.buf, host)
+        local status, len, _, respdata, _ = pcap:pcap_receive()
 
-	pcap:pcap_close()
-	dnet:ip_close()
+        if ( status) then
+                local response = packet.Packet:new ( respdata, len, false)
+                if ( response:ip_parse() and response:icmp_parse() and response.icmp_type == ICMP_MS_SYNC_RESP) then
+                        stdnse.print_debug ( 1, "Found ----> IP %s | ICMP Type %d", response.ip_src, response.icmp_type)
+                        output = string.format ( "Received ICMP MS_SYNC RESP for IP %s -- possible Treck TCP/IP stack.", host.ip)
+                end
+        end
 
-	return output
+        pcap:pcap_close()
+        dnet:ip_close()
+
+        return output
 end
