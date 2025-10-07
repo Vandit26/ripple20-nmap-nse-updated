@@ -80,7 +80,7 @@ action = function(host)
 	icmp.icmp_code = 0
 
 	if ( anon == 0) then	
-		icmp.icmp_payload = packet.numtostr16(0xdead) .. packet.numtostr16(0xbeef) .. "ripple"
+		icmp.icmp_payload = bin.pack(">H", 0xdead) .. bin.pack(">H", 0xbeef) .. "ripple"
 	else
 		icmp.icmp_payload = openssl.rand_bytes(2) .. openssl.rand_bytes(2) .. openssl.rand_bytes(8)
 	end
