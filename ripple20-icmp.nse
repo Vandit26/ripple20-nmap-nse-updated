@@ -79,7 +79,7 @@ action = function(host)
         icmp.icmp_code = 0
 
         if ( anon == 0) then
-                icmp.icmp_payload = string.pack(">H", 0xdead) .. string.pack(">H", 0xbeef) .. "ripple"
+                icmp.icmp_payload = string.pack(">H", 0xdead) .. string.pack(">H", 0xbeef) .. "ripple" -- bin.lua error fix
         else
                 icmp.icmp_payload = openssl.rand_bytes(2) .. openssl.rand_bytes(2) .. openssl.rand_bytes(6)  -- Adjusted to 6 bytes to match "ripple" length for consistency
         end
